@@ -27,6 +27,20 @@ http://localhost:3000
 
 Compose 会把 SQLite 数据持久化到 `clipboard-data` 卷，把本地开发回退上传目录持久化到 `clipboard-uploads` 卷。Docker 部署时 `SQLITE_PATH` 会被 `docker-compose.yml` 覆盖为 `/app/data/clipboard.sqlite`，`.env.example` 里的相对路径只用于本地开发。生产环境建议配置腾讯 COS，文件下载流量会直接走对象存储。
 
+如果需要部署到子路径，例如 `https://example.com/clipboard`，在构建镜像前配置：
+
+```bash
+NEXT_PUBLIC_PUBLIC_PATH=/clipboard
+```
+
+然后重新构建：
+
+```bash
+docker compose up -d --build
+```
+
+`NEXT_PUBLIC_PUBLIC_PATH` 会作为 Next.js `basePath` 使用，属于构建期配置，修改后必须重新构建镜像。
+
 反向代理示例：
 
 ```nginx

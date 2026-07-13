@@ -11,6 +11,7 @@ import {
 const dev = process.env.NODE_ENV !== "production" && process.env.npm_lifecycle_event !== "start";
 const hostname = process.env.HOST || process.env.SERVER_HOST || "0.0.0.0";
 const port = Number(process.env.PORT || 3000);
+const publicPath = normalizePublicPath(process.env.NEXT_PUBLIC_PUBLIC_PATH || process.env.PUBLIC_PATH);
 
 const app = next({ dev, hostname, port });
 const handle = app.getRequestHandler();
@@ -20,13 +21,20 @@ await app.prepare();
 const httpServer = createServer((req, res) => handle(req, res));
 const io = new Server(httpServer, {
   cors: { origin: "*" },
-  maxHttpBufferSize: 25 * 1024 * 1024
+  maxHttpBufferSize: 25 * 1024 * 1024,
+  path: `${publicPath}/socket.io`
 });
 
 const presence = new Map();
 
 function roomName(code) {
   return `clipboard:${code}`;
+}
+
+function normalizePublicPath(value) {
+  const trimmed = (value || "").trim();
+  if (!trimmed || trimmed === "/") return "";
+  return `/${trimmed.replace(/^\/+|\/+$/g, "")}`;
 }
 
 function broadcastPresence(code) {

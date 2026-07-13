@@ -16,6 +16,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { publicPath, stripPublicPath, withPublicPath } from "@/lib/public-path";
 import { formatBytes } from "@/lib/utils";
 
 type Participant = {
@@ -88,16 +89,21 @@ function formatTime(value: string) {
 function getDownloadHref(message: Message) {
   if (!message.file_url) return "#";
   if (/^https?:\/\//i.test(message.file_url)) return message.file_url;
-  return `/api/download?id=${message.id}`;
+  return withPublicPath(`/api/download?id=${message.id}`);
+}
+
+function getFileSrc(url?: string | null) {
+  if (!url || /^https?:\/\//i.test(url) || url.startsWith("data:")) return url || "";
+  return withPublicPath(url);
 }
 
 function getCodeFromPath() {
-  const segment = window.location.pathname.split("/").filter(Boolean)[0];
+  const segment = stripPublicPath(window.location.pathname).split("/").filter(Boolean)[0];
   return segment ? decodeURIComponent(segment) : "";
 }
 
 function updateCodePath(code: string) {
-  const nextPath = `/${encodeURIComponent(code)}`;
+  const nextPath = `${publicPath}/${encodeURIComponent(code)}`;
   if (window.location.pathname !== nextPath) {
     window.history.pushState(null, "", nextPath);
   }
@@ -152,7 +158,7 @@ export default function Home() {
       setError("");
 
       try {
-        const res = await fetch("/api/clipboards", {
+        const res = await fetch(withPublicPath("/api/clipboards"), {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -171,7 +177,7 @@ export default function Home() {
         if (syncPath) updateCodePath(data.clipboard.code);
 
         socketRef.current?.disconnect();
-        const socket = io();
+        const socket = io({ path: withPublicPath("/socket.io") });
         socketRef.current = socket;
 
         const joinRealtimeRoom = () => {
@@ -250,7 +256,7 @@ export default function Home() {
           const form = new FormData();
           form.append("file", file);
           form.append("code", activeCode);
-          const res = await fetch("/api/upload", { method: "POST", body: form });
+          const res = await fetch(withPublicPath("/api/upload"), { method: "POST", body: form });
           const data = await res.json();
           if (!res.ok) throw new Error(data.error || `${file.name} 上传失败`);
 
@@ -433,7 +439,7 @@ export default function Home() {
                       {message.type === "image" && message.file_url && (
                         <a href={getDownloadHref(message)} className="block" download={message.file_name || true}>
                           <img
-                            src={message.file_url}
+                            src={getFileSrc(message.file_url)}
                             alt={message.file_name || "图片"}
                             className="max-h-72 max-w-full rounded-md object-contain"
                           />

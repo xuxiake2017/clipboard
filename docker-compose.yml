@@ -1,6 +1,9 @@
 services:
   clipboard:
-    build: .
+    build:
+      context: .
+      args:
+        NEXT_PUBLIC_PUBLIC_PATH: ${NEXT_PUBLIC_PUBLIC_PATH:-}
     image: online-clipboard:latest
     restart: unless-stopped
     ports:
@@ -12,6 +15,7 @@ services:
       HOST: 0.0.0.0
       PORT: 3000
       SQLITE_PATH: /app/data/clipboard.sqlite
+      NEXT_PUBLIC_PUBLIC_PATH: ${NEXT_PUBLIC_PUBLIC_PATH:-}
     volumes:
       - clipboard-data:/app/data
       - clipboard-uploads:/app/public/uploads
