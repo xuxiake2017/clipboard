@@ -1,0 +1,21 @@
+services:
+  clipboard:
+    build: .
+    image: online-clipboard:latest
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    env_file:
+      - .env.local
+    environment:
+      NODE_ENV: production
+      HOST: 0.0.0.0
+      PORT: 3000
+      SQLITE_PATH: /app/data/clipboard.sqlite
+    volumes:
+      - clipboard-data:/app/data
+      - clipboard-uploads:/app/public/uploads
+
+volumes:
+  clipboard-data:
+  clipboard-uploads:

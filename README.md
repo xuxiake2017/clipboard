@@ -11,6 +11,36 @@ npm run dev
 
 默认地址：`http://localhost:3000`
 
+## Docker 部署
+
+先准备 `.env.local`，可从 `.env.example` 复制并填写腾讯 COS 配置。然后执行：
+
+```bash
+docker compose up -d --build
+```
+
+默认访问地址：
+
+```text
+http://localhost:3000
+```
+
+Compose 会把 SQLite 数据持久化到 `clipboard-data` 卷，把本地开发回退上传目录持久化到 `clipboard-uploads` 卷。生产环境建议配置腾讯 COS，文件下载流量会直接走对象存储。
+
+反向代理示例：
+
+```nginx
+location / {
+  proxy_pass http://127.0.0.1:3000;
+  proxy_http_version 1.1;
+  proxy_set_header Host $host;
+  proxy_set_header X-Real-IP $remote_addr;
+  proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+  proxy_set_header Upgrade $http_upgrade;
+  proxy_set_header Connection "upgrade";
+}
+```
+
 ## 功能
 
 - 首页介绍在线剪贴板能力，并提供识别码输入框。
