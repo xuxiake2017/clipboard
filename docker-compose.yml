@@ -3,6 +3,8 @@ services:
     build:
       context: .
       args:
+        # Compose variable interpolation reads shell env, .env, or --env-file.
+        # When using .env.local, run: docker compose --env-file .env.local up -d --build
         NEXT_PUBLIC_PUBLIC_PATH: ${NEXT_PUBLIC_PUBLIC_PATH:-}
     image: online-clipboard:latest
     restart: unless-stopped
@@ -15,6 +17,7 @@ services:
       HOST: 0.0.0.0
       PORT: 3000
       SQLITE_PATH: /app/data/clipboard.sqlite
+      # Keep this value the same as the build arg above.
       NEXT_PUBLIC_PUBLIC_PATH: ${NEXT_PUBLIC_PUBLIC_PATH:-}
     volumes:
       - clipboard-data:/app/data
