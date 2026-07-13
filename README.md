@@ -25,7 +25,7 @@ docker compose up -d --build
 http://localhost:3000
 ```
 
-Compose 会把 SQLite 数据持久化到 `clipboard-data` 卷，把本地开发回退上传目录持久化到 `clipboard-uploads` 卷。生产环境建议配置腾讯 COS，文件下载流量会直接走对象存储。
+Compose 会把 SQLite 数据持久化到 `clipboard-data` 卷，把本地开发回退上传目录持久化到 `clipboard-uploads` 卷。Docker 部署时 `SQLITE_PATH` 会被 `docker-compose.yml` 覆盖为 `/app/data/clipboard.sqlite`，`.env.example` 里的相对路径只用于本地开发。生产环境建议配置腾讯 COS，文件下载流量会直接走对象存储。
 
 反向代理示例：
 
