@@ -21,6 +21,8 @@ export function getDb() {
     CREATE TABLE IF NOT EXISTS clipboards (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       code TEXT NOT NULL UNIQUE,
+      password_salt TEXT,
+      password_hash TEXT,
       created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
       updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
     );
@@ -56,6 +58,15 @@ export function getDb() {
       FOREIGN KEY(participant_id) REFERENCES participants(id) ON DELETE CASCADE
     );
   `);
+
+  const clipboardColumns = db.prepare("PRAGMA table_info('clipboards')").all().map((column) => column.name);
+  if (!clipboardColumns.includes("password_salt")) {
+    db.exec("ALTER TABLE clipboards ADD COLUMN password_salt TEXT");
+  }
+  if (!clipboardColumns.includes("password_hash")) {
+    db.exec("ALTER TABLE clipboards ADD COLUMN password_hash TEXT");
+  }
+
   return db;
 }
 
@@ -66,18 +77,47 @@ export function normalizeCode(code) {
     .slice(0, 64);
 }
 
-export function getOrCreateClipboard(code) {
+export function getClipboardByCode(code) {
   const db = getDb();
   const normalized = normalizeCode(code);
   if (!normalized) throw new Error("识别码不能为空");
 
-  let row = db.prepare("SELECT * FROM clipboards WHERE code = ?").get(normalized);
+  return db.prepare("SELECT * FROM clipboards WHERE code = ?").get(normalized);
+}
+
+export function createClipboard(input) {
+  const db = getDb();
+  const normalized = normalizeCode(input.code);
+  if (!normalized) throw new Error("识别码不能为空");
+
+  const result = db
+    .prepare("INSERT INTO clipboards (code, password_salt, password_hash) VALUES (?, ?, ?)")
+    .run(normalized, input.passwordSalt, input.passwordHash);
+  return db.prepare("SELECT * FROM clipboards WHERE id = ?").get(Number(result.lastInsertRowid));
+}
+
+export function setClipboardPassword(id, input) {
+  const db = getDb();
+  db.prepare(
+    `UPDATE clipboards
+     SET password_salt = ?, password_hash = ?, updated_at = CURRENT_TIMESTAMP
+     WHERE id = ?`
+  ).run(input.passwordSalt, input.passwordHash, id);
+  return db.prepare("SELECT * FROM clipboards WHERE id = ?").get(id);
+}
+
+export function touchClipboard(id) {
+  const db = getDb();
+  db.prepare("UPDATE clipboards SET updated_at = CURRENT_TIMESTAMP WHERE id = ?").run(id);
+  return db.prepare("SELECT * FROM clipboards WHERE id = ?").get(id);
+}
+
+export function getOrCreateClipboard(code) {
+  const row = getClipboardByCode(code);
   if (!row) {
-    const result = db.prepare("INSERT INTO clipboards (code) VALUES (?)").run(normalized);
-    row = db.prepare("SELECT * FROM clipboards WHERE id = ?").get(Number(result.lastInsertRowid));
-  } else {
-    db.prepare("UPDATE clipboards SET updated_at = CURRENT_TIMESTAMP WHERE id = ?").run(row.id);
+    return createClipboard({ code, passwordSalt: null, passwordHash: null });
   }
+  touchClipboard(row.id);
   return row;
 }
 

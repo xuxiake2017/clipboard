@@ -8,10 +8,10 @@ import {
   File as FileIcon,
   Image as ImageIcon,
   Loader2,
+  Lock,
   Paperclip,
   Send,
-  Users,
-  X
+  Users
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -91,8 +91,21 @@ function getDownloadHref(message: Message) {
   return `/api/download?id=${message.id}`;
 }
 
+function getCodeFromPath() {
+  const segment = window.location.pathname.split("/").filter(Boolean)[0];
+  return segment ? decodeURIComponent(segment) : "";
+}
+
+function updateCodePath(code: string) {
+  const nextPath = `/${encodeURIComponent(code)}`;
+  if (window.location.pathname !== nextPath) {
+    window.history.pushState(null, "", nextPath);
+  }
+}
+
 export default function Home() {
   const [code, setCode] = useState("");
+  const [password, setPassword] = useState("");
   const [activeCode, setActiveCode] = useState("");
   const [participant, setParticipant] = useState<Participant | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
@@ -124,10 +137,14 @@ export default function Home() {
   }, [activeCode]);
 
   const joinClipboard = useCallback(
-    async (nextCode?: string) => {
+    async (nextCode?: string, syncPath = true) => {
       const targetCode = (nextCode || code).trim();
       if (!targetCode) {
         setError("请输入识别码");
+        return;
+      }
+      if (!password) {
+        setError("请输入剪贴板密码");
         return;
       }
 
@@ -140,6 +157,7 @@ export default function Home() {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             code: targetCode,
+            password,
             osName: getOsName(),
             browserKey: getBrowserKey()
           })
@@ -150,6 +168,7 @@ export default function Home() {
         setActiveCode(data.clipboard.code);
         setCode(data.clipboard.code);
         setParticipant(data.participant);
+        if (syncPath) updateCodePath(data.clipboard.code);
 
         socketRef.current?.disconnect();
         const socket = io();
@@ -179,8 +198,15 @@ export default function Home() {
         setLoading(false);
       }
     },
-    [addMessage, code]
+    [addMessage, code, password]
   );
+
+  useEffect(() => {
+    const pathCode = getCodeFromPath();
+    if (pathCode) {
+      setCode(pathCode);
+    }
+  }, []);
 
   const sendMessage = useCallback(
     (payload: Partial<Message> & { type: "text" | "image" | "file" }) => {
@@ -267,7 +293,7 @@ export default function Home() {
     () => [
       { title: "多端同步", text: "电脑、手机打开同一识别码即可共享剪贴板。" },
       { title: "实时协作", text: "文字、图片和文件消息会即时推送给在线成员。" },
-      { title: "轻量身份", text: "按房间、浏览器和 IP 固定头像与昵称，重复进入保持一致。" }
+      { title: "密码保护", text: "首次进入会绑定密码，之后访问同一识别码需要校验。" }
     ],
     []
   );
@@ -290,7 +316,7 @@ export default function Home() {
           </div>
 
           <form
-            className="flex max-w-xl flex-col gap-3 rounded-lg border bg-white/78 p-3 shadow-sm backdrop-blur sm:flex-row"
+            className="grid max-w-xl gap-3 rounded-lg border bg-white/78 p-3 shadow-sm backdrop-blur sm:grid-cols-[1fr_1fr_auto]"
             onSubmit={(event) => {
               event.preventDefault();
               joinClipboard();
@@ -303,8 +329,16 @@ export default function Home() {
               className="h-12 flex-1 border-transparent bg-white text-base"
               autoComplete="off"
             />
+            <Input
+              type="password"
+              value={password}
+              onChange={(event) => setPassword(event.target.value)}
+              placeholder="输入剪贴板密码"
+              className="h-12 border-transparent bg-white text-base"
+              autoComplete="current-password"
+            />
             <Button type="submit" className="h-12 gap-2" disabled={loading}>
-              {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+              {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Lock className="h-4 w-4" />}
               进入
             </Button>
           </form>

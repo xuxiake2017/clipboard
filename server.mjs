@@ -2,7 +2,7 @@ import { createServer } from "node:http";
 import next from "next";
 import { Server } from "socket.io";
 import {
-  getOrCreateClipboard,
+  getClipboardByCode,
   getParticipantById,
   insertMessage,
   listMessages
@@ -39,7 +39,8 @@ function broadcastPresence(code) {
 io.on("connection", (socket) => {
   socket.on("join", ({ code, participantId }, ack) => {
     try {
-      const clipboard = getOrCreateClipboard(code);
+      const clipboard = getClipboardByCode(code);
+      if (!clipboard) throw new Error("剪贴板不存在，请先通过密码进入");
       const participant = getParticipantById(Number(participantId));
 
       if (!participant || participant.clipboard_id !== clipboard.id) {
@@ -65,7 +66,8 @@ io.on("connection", (socket) => {
 
   socket.on("message:create", (payload, ack) => {
     try {
-      const clipboard = getOrCreateClipboard(payload.code);
+      const clipboard = getClipboardByCode(payload.code);
+      if (!clipboard) throw new Error("剪贴板不存在，请先通过密码进入");
       const participant = getParticipantById(Number(payload.participantId));
 
       if (!participant || participant.clipboard_id !== clipboard.id) {
