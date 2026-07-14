@@ -22,8 +22,25 @@ const avatarStyles = [
 ];
 
 function getIp(req: NextRequest) {
-  const forwarded = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim();
-  return forwarded || req.headers.get("x-real-ip") || "127.0.0.1";
+  const realIp = req.headers.get("X-Real-IP")?.trim();
+  const forwarded = req.headers.get("X-Forwarded-For")?.split(",")[0]?.trim();
+  return normalizeIp(realIp || forwarded || "127.0.0.1");
+}
+
+function normalizeIp(ip: string) {
+  return ip.trim().replace(/^::ffff:/, "");
+}
+
+function getAllowedCreateIps() {
+  return (process.env.CLIPBOARD_CREATE_ALLOWED_IPS || "")
+    .split(",")
+    .map((ip) => normalizeIp(ip))
+    .filter(Boolean);
+}
+
+function canCreateClipboard(ip: string) {
+  const allowedIps = getAllowedCreateIps();
+  return allowedIps.length === 0 || allowedIps.includes(normalizeIp(ip));
 }
 
 function hash(value: string) {
@@ -48,8 +65,19 @@ export async function POST(req: NextRequest) {
       throw new Error("请输入剪贴板密码");
     }
 
+    const ip = getIp(req);
     let clipboard = getClipboardByCode(body.code);
     if (!clipboard) {
+      if (!canCreateClipboard(ip)) {
+        console.warn(
+          `[clipboard] create_denied ${JSON.stringify({
+            code: String(body.code || "").slice(0, 64),
+            ip
+          })}`
+        );
+        throw new Error("当前 IP 不允许新建剪贴板");
+      }
+
       const passwordSalt = randomBytes(16).toString("hex");
       clipboard = createClipboard({
         code: body.code,
@@ -70,7 +98,6 @@ export async function POST(req: NextRequest) {
 
     const osName = String(body.osName || "Unknown OS").slice(0, 40);
     const browserKey = String(body.browserKey || req.headers.get("user-agent") || "unknown").slice(0, 240);
-    const ip = getIp(req);
     const nickname = `${osName} ${ip}`;
 
     let participant = getParticipant(clipboard.id, browserKey);
