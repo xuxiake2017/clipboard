@@ -22,9 +22,9 @@ const avatarStyles = [
 ];
 
 function getIp(req: NextRequest) {
-  const realIp = req.headers.get("X-Real-IP")?.trim();
   const forwarded = req.headers.get("X-Forwarded-For")?.split(",")[0]?.trim();
-  return normalizeIp(realIp || forwarded || "127.0.0.1");
+  const realIp = req.headers.get("X-Real-IP")?.trim();
+  return normalizeIp(forwarded || realIp || "127.0.0.1");
 }
 
 function normalizeIp(ip: string) {
