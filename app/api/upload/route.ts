@@ -21,9 +21,41 @@ function logUpload(level: "info" | "error", event: string, data: Record<string, 
   }
 }
 
+function sanitizeErrorValue(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(sanitizeErrorValue);
+  if (!value || typeof value !== "object") return value;
+
+  return Object.fromEntries(
+    Object.entries(value as Record<string, unknown>).map(([key, item]) => {
+      if (/secret|token|authorization|signature|credential|key/i.test(key)) {
+        return [key, "[redacted]"];
+      }
+      return [key, sanitizeErrorValue(item)];
+    })
+  );
+}
+
 function serializeError(error: unknown) {
-  if (!(error instanceof Error)) return { message: String(error) };
+  if (!(error instanceof Error)) {
+    if (error && typeof error === "object") {
+      const detail = sanitizeErrorValue(error) as Record<string, unknown>;
+      return {
+        message:
+          detail.message ||
+          detail.Message ||
+          detail.error ||
+          detail.Error ||
+          JSON.stringify(detail),
+        detail
+      };
+    }
+    return { message: String(error) };
+  }
+
   const extra = error as Error & {
+    Code?: string;
+    Message?: string;
+    RequestId?: string;
     code?: string;
     statusCode?: number;
     headers?: Record<string, string>;
@@ -32,9 +64,10 @@ function serializeError(error: unknown) {
   return {
     name: error.name,
     message: error.message,
-    code: extra.code,
+    code: extra.code || extra.Code,
+    cosMessage: extra.Message,
     statusCode: extra.statusCode,
-    requestId: extra.requestId,
+    requestId: extra.requestId || extra.RequestId,
     cosRequestId: extra.headers?.["x-cos-request-id"]
   };
 }
@@ -159,13 +192,20 @@ export async function POST(req: NextRequest) {
       requestId
     });
   } catch (error) {
+    const serializedError = serializeError(error);
     logUpload("error", "failed", {
       requestId,
       ...fileInfo,
-      error: serializeError(error)
+      error: serializedError
     });
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : "上传失败", requestId },
+      {
+        error:
+          typeof serializedError.message === "string" && serializedError.message !== "[object Object]"
+            ? serializedError.message
+            : "上传失败",
+        requestId
+      },
       { status: 500 }
     );
   }
