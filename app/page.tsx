@@ -257,8 +257,12 @@ export default function Home() {
           form.append("file", file);
           form.append("code", activeCode);
           const res = await fetch(withPublicPath("/api/upload"), { method: "POST", body: form });
-          const data = await res.json();
-          if (!res.ok) throw new Error(data.error || `${file.name} 上传失败`);
+          const contentType = res.headers.get("content-type") || "";
+          const data = contentType.includes("application/json") ? await res.json() : null;
+          if (!res.ok) {
+            const requestId = data?.requestId ? `（请求 ID：${data.requestId}）` : "";
+            throw new Error(data?.error ? `${data.error}${requestId}` : `${file.name} 上传失败：HTTP ${res.status}`);
+          }
 
           const isImage = (data.type || file.type || "").startsWith("image/");
           sendMessage({

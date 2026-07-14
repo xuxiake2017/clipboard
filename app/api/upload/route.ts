@@ -8,6 +8,37 @@ export const runtime = "nodejs";
 
 const uploadRoot = join(process.cwd(), "public", "uploads");
 
+function logUpload(level: "info" | "error", event: string, data: Record<string, unknown>) {
+  const payload = {
+    event,
+    ...data
+  };
+  const line = `[upload] ${JSON.stringify(payload)}`;
+  if (level === "error") {
+    console.error(line);
+  } else {
+    console.info(line);
+  }
+}
+
+function serializeError(error: unknown) {
+  if (!(error instanceof Error)) return { message: String(error) };
+  const extra = error as Error & {
+    code?: string;
+    statusCode?: number;
+    headers?: Record<string, string>;
+    requestId?: string;
+  };
+  return {
+    name: error.name,
+    message: error.message,
+    code: extra.code,
+    statusCode: extra.statusCode,
+    requestId: extra.requestId,
+    cosRequestId: extra.headers?.["x-cos-request-id"]
+  };
+}
+
 function extFromName(name: string) {
   const ext = name.split(".").pop();
   return ext && ext !== name ? `.${ext}` : "";
@@ -55,25 +86,54 @@ async function uploadToCos(file: File, key: string) {
 }
 
 export async function POST(req: NextRequest) {
+  const requestId = randomUUID();
+  let fileInfo: Record<string, unknown> = {};
+
   try {
     const form = await req.formData();
     const file = form.get("file");
     const code = String(form.get("code") || "default").replace(/[^\w-]/g, "_").slice(0, 64);
 
     if (!(file instanceof File)) {
-      return NextResponse.json({ error: "没有收到文件" }, { status: 400 });
+      logUpload("error", "missing_file", { requestId, code });
+      return NextResponse.json({ error: "没有收到文件", requestId }, { status: 400 });
     }
+
+    fileInfo = {
+      fileName: file.name,
+      fileSize: file.size,
+      mimeType: file.type || "application/octet-stream"
+    };
+    logUpload("info", "started", {
+      requestId,
+      code,
+      ...fileInfo,
+      cosConfigured: Boolean(
+        process.env.TENCENT_SECRET_ID &&
+          process.env.TENCENT_SECRET_KEY &&
+          process.env.TENCENT_COS_BUCKET &&
+          process.env.TENCENT_COS_REGION
+      )
+    });
 
     const key = `clipboards/${code}/${new Date().toISOString().slice(0, 10)}/${randomUUID()}${extFromName(file.name)}`;
     const cosResult = await uploadToCos(file, key);
 
     if (cosResult) {
+      logUpload("info", "succeeded", {
+        requestId,
+        code,
+        storage: "tencent-cos",
+        key,
+        ...fileInfo
+      });
       return NextResponse.json({
         url: cosResult.url,
         name: file.name,
         size: file.size,
         type: file.type,
-        storage: "tencent-cos"
+        storage: "tencent-cos",
+        requestId
       });
     }
 
@@ -82,16 +142,30 @@ export async function POST(req: NextRequest) {
     const localPath = join(uploadRoot, localName);
     await writeFile(localPath, Buffer.from(await file.arrayBuffer()));
 
+    logUpload("info", "succeeded", {
+      requestId,
+      code,
+      storage: "local-dev",
+      localName,
+      ...fileInfo
+    });
+
     return NextResponse.json({
       url: `/uploads/${localName}`,
       name: file.name,
       size: file.size,
       type: file.type,
-      storage: "local-dev"
+      storage: "local-dev",
+      requestId
     });
   } catch (error) {
+    logUpload("error", "failed", {
+      requestId,
+      ...fileInfo,
+      error: serializeError(error)
+    });
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : "上传失败" },
+      { error: error instanceof Error ? error.message : "上传失败", requestId },
       { status: 500 }
     );
   }
