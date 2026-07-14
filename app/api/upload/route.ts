@@ -78,9 +78,15 @@ function extFromName(name: string) {
 }
 
 function contentDisposition(filename: string) {
-  const safeName = filename.replace(/[\r\n"]/g, "_") || "download";
-  const encoded = encodeURIComponent(safeName).replace(/['()]/g, escape).replace(/\*/g, "%2A");
-  return `attachment; filename="${safeName}"; filename*=UTF-8''${encoded}`;
+  const fallbackName =
+    filename
+      .replace(/[\r\n"\\]/g, "_")
+      .replace(/[^\x20-\x7E]/g, "_")
+      .trim() || "download";
+  const encoded = encodeURIComponent(filename.replace(/[\r\n]/g, "_"))
+    .replace(/['()]/g, escape)
+    .replace(/\*/g, "%2A");
+  return `attachment; filename="${fallbackName}"; filename*=UTF-8''${encoded}`;
 }
 
 async function uploadToCos(file: File, key: string) {
